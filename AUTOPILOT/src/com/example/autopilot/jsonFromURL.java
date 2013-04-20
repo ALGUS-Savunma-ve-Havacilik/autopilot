@@ -11,7 +11,7 @@ import org.apache.http.impl.client.DefaultHttpClient;
 
 import android.os.AsyncTask;
 
-class wxInterface extends AsyncTask<String, Void, String> {
+class jsonFromURL extends AsyncTask<String, Void, String> {
 	protected String doInBackground(String... urls) {
 		HttpClient httpclient = new DefaultHttpClient();
 		HttpGet httpget = new HttpGet(urls[0]);

@@ -50,7 +50,7 @@ public class MainActivity extends Activity implements LocationListener,
 	float[] mRotationM = new float[9];
 	float[] mOrientation = new float[3];
 	float[] pressure_gradient = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
-	float ground_speed, ground_bearing, lat, lon;
+	float ground_speed, ground_bearing, lat, lon, wind_speed, wind_bearing;
 	float p0 = SensorManager.PRESSURE_STANDARD_ATMOSPHERE;
 	float GEOHEIGHT = 1608.637939453125f;
 	float[] POS0 = new float[3];
@@ -64,7 +64,7 @@ public class MainActivity extends Activity implements LocationListener,
 
 	float[] ECEF = { 0, 0, 0 };
 
-	float windSpeed, windBearing;
+	float[] aircraft_state = { 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0 };
 
 	private Runnable runnable = new Runnable() {
 		@Override
@@ -144,6 +144,12 @@ public class MainActivity extends Activity implements LocationListener,
 		position_inertial = Matrix.multiply(Matrix.multiply(ROT2, ROT1), delta);
 	}
 
+	/**
+	 * Sets the ground state values. Assigns the current pressure to from the
+	 * barometric pressure sensor to p0. Sets origin for the North East down
+	 * coordinate system in ECEF coordinates to POS0. Gets weather of current
+	 * location by getWeather().
+	 */
 	private void getGroundState() {
 		p0 = mPress[0];
 
@@ -158,18 +164,26 @@ public class MainActivity extends Activity implements LocationListener,
 		}
 	}
 
+	/**
+	 * Finds the current weather for the present location as set by the GPS
+	 * receiver. Assigns values for local wind speed and direction to wind_speed
+	 * and wind_bearing.
+	 * 
+	 * @throws MalformedURLException
+	 * @throws IOException
+	 */
 	private void getWeather() throws MalformedURLException, IOException {
 		try {
-			String WX = new wxInterface().execute(
+			String WX = new jsonFromURL().execute(
 					"https://api.forecast.io/forecast/61be74bdb1292056b2de9c9be6e94ffe/"
-							+ String.valueOf(lat) + "," + String.valueOf(lon))
-					.get();
+							+ String.valueOf(lat) + "," + String.valueOf(lon)
+							+ "?units=si").get();
 			try {
 				JSONObject weather = new JSONObject(WX);
-				windSpeed = (float) weather.getJSONObject("currently")
+				wind_speed = (float) weather.getJSONObject("currently")
 						.getDouble("windSpeed");
-				windBearing = (float) weather.getJSONObject("currently")
-						.getDouble("windBearing");
+				wind_bearing = (float) weather.getJSONObject("currently")
+						.getDouble("windBearing") + 180.0f;
 			} catch (JSONException e) {
 				e.printStackTrace();
 			}
@@ -184,6 +198,11 @@ public class MainActivity extends Activity implements LocationListener,
 	public void onAccuracyChanged(Sensor arg0, int arg1) {
 	}
 
+	/*
+	 * (non-Javadoc)
+	 * 
+	 * @see android.app.Activity#onCreate(android.os.Bundle)
+	 */
 	@Override
 	protected void onCreate(Bundle savedInstanceState) {
 		super.onCreate(savedInstanceState);
@@ -318,30 +337,57 @@ public class MainActivity extends Activity implements LocationListener,
 	public void onStatusChanged(String provider, int status, Bundle extras) {
 	}
 
+	/**
+	 * Sets the current state of the aircraft.
+	 * 
+	 * Depends On: lat = latitude lon = longitude Sensor Readings
+	 * <p>
+	 * Assigns: aircraft_state = 12x1 state vector
+	 * [position;orientation;velocity_body;omega_body]
+	 */
 	private void setCurrentState() {
 		float[][] FLIPPER_WB = { { 0, 1, 0 }, { 1, 0, 0 }, { 0, 0, -1 } };
 		float[][] FLIPPER_EA = { { 1, 0, 0 }, { 0, -1, 0 }, { 0, 0, 1 } };
 
 		findXYPosition();
 		euler_angles = Matrix.multiply(FLIPPER_EA, mOrientation);
-		velocity_inertial[0] = (float) (ground_speed * Math.cos(ground_bearing
-				* Math.PI / 180));
-		velocity_inertial[1] = (float) (ground_speed * Math.sin(ground_bearing
-				* Math.PI / 180));
+		velocity_inertial[0] = (float) (ground_speed
+				* Math.cos(ground_bearing * Math.PI / 180) - wind_speed
+				* Math.cos(wind_bearing));
+		velocity_inertial[1] = (float) (ground_speed
+				* Math.sin(ground_bearing * Math.PI / 180) - wind_speed
+				* Math.sin(wind_bearing));
 		velocity_inertial[2] = findVerticalVelocity();
 		velocity_body = Aircraft.TransformFromInertialToBody(velocity_inertial,
 				euler_angles);
 		omega_body = Matrix.multiply(FLIPPER_WB, mOmegaBody);
+
+		System.arraycopy(position_inertial, 0, aircraft_state, 0, 3);
+		System.arraycopy(euler_angles, 0, aircraft_state, 3, 3);
+		System.arraycopy(velocity_body, 0, aircraft_state, 6, 3);
+		System.arraycopy(omega_body, 0, aircraft_state, 9, 3);
 	}
 
+	/**
+	 * First sets the ground state of the aircraft then begins the timed
+	 * execution of the autopilot functionality.
+	 * 
+	 * @param view
+	 *            The AUTOPILOT view. Allows the button to start the autopilot.
+	 */
 	public void startAutopilot(View view) {
 		getGroundState();
 		handler.postDelayed(runnable, 10);
 	}
 
+	/**
+	 * updateECEF() computes the Earth Centered Earth Fixed (ECEF) position in
+	 * XYZ from the WGS84 Ellipsoid.
+	 * <p>
+	 * Assigns: ECEF[] = Float containing the current XYZ position in ECEF
+	 * coordinates.
+	 */
 	private void updateECEF() {
-		// updateECEF() computes the Earth Centered Earth Fixed position in XYZ
-		// from the WGS84 Ellipsoid.
 		double a = 6378137.0;
 		double b = 6356752.314245;
 		double ECC = Math.sqrt(1 - Math.pow(b, 2) / Math.pow(a, 2));
@@ -357,6 +403,9 @@ public class MainActivity extends Activity implements LocationListener,
 				.sin(lat * Math.PI / 180));
 	}
 
+	/**
+	 * Updates UI values to their current values from aircraft_state.
+	 */
 	public void updateValues() {
 		XField.setText(String.valueOf(position_inertial[0]));
 		YField.setText(String.valueOf(position_inertial[1]));
