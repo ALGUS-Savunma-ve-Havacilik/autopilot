@@ -120,11 +120,11 @@ public class MainActivity extends Activity implements LocationListener,
 		ROT1[0][0] = (float) Math.cos(lon);
 		ROT1[0][1] = (float) Math.sin(lon);
 		ROT1[0][2] = 0;
-		
+
 		ROT1[1][0] = (float) -Math.sin(lon);
 		ROT1[1][1] = (float) Math.cos(lon);
 		ROT1[1][2] = 0;
-		
+
 		ROT1[2][0] = 0;
 		ROT1[2][1] = 0;
 		ROT1[2][2] = 1;
@@ -132,11 +132,11 @@ public class MainActivity extends Activity implements LocationListener,
 		ROT2[0][0] = (float) -Math.sin(lat);
 		ROT2[0][1] = 0;
 		ROT2[0][2] = (float) Math.cos(lat);
-		
+
 		ROT2[1][0] = 0;
 		ROT2[1][1] = 1;
 		ROT2[1][2] = 0;
-		
+
 		ROT2[2][0] = (float) -Math.cos(lat);
 		ROT2[2][1] = 0;
 		ROT2[2][2] = (float) -Math.sin(lat);
@@ -340,6 +340,8 @@ public class MainActivity extends Activity implements LocationListener,
 	}
 
 	private void updateECEF() {
+		// updateECEF() computes the Earth Centered Earth Fixed position in XYZ
+		// from the WGS84 Ellipsoid.
 		double a = 6378137.0;
 		double b = 6356752.314245;
 		double ECC = Math.sqrt(1 - Math.pow(b, 2) / Math.pow(a, 2));
