@@ -353,10 +353,10 @@ public class MainActivity extends Activity implements LocationListener,
 		euler_angles = Matrix.multiply(FLIPPER_EA, mOrientation);
 		velocity_inertial[0] = (float) (ground_speed
 				* Math.cos(ground_bearing * Math.PI / 180) - wind_speed
-				* Math.cos(wind_bearing));
+				* Math.cos(wind_bearing * Math.PI / 180));
 		velocity_inertial[1] = (float) (ground_speed
 				* Math.sin(ground_bearing * Math.PI / 180) - wind_speed
-				* Math.sin(wind_bearing));
+				* Math.sin(wind_bearing * Math.PI / 180));
 		velocity_inertial[2] = findVerticalVelocity();
 		velocity_body = Aircraft.TransformFromInertialToBody(velocity_inertial,
 				euler_angles);
